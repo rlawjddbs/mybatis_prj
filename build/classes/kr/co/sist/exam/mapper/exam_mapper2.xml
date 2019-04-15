@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  <!-- Query문을 정의 
+  		namespace: XML내에서 중복된 id를 사용할 수 있도록 구분하는 것.
+  		패키지와 비슷한 용도, 주고 싶은 이름값 주기
+  -->
+<mapper namespace="kr.co.sist.exam2">
+<!-- Diary List에 대한 Mapper 설정 -->
+	<resultMap type="kr.co.sist.exam.domain.DiaryList" id="dlResult">
+		<result column="num" property="num" />
+		<result column="subject" property="subject" />
+		<result column="writer" property="writer" />
+		<result column="evt_date" property="evt_date" />
+		<result column="w_date" property="w_date" />
+	</resultMap>
+
+	<!-- 컬럼 하나에 레코드 하나 조회 -->
+	<!-- 컬럼 하나에 레코드 여러개 조회 -->
+	<!-- 컬럼 여러개 레코드 하나 조회 -->
+	<!-- 컬럼 여러개 레코드 여러개조회 -->
+	<!-- < 의 조회 -->	
+	<!-- > 의 조회 -->
+	<!-- 동일쿼리의 처리 -->
+	<!-- like의 조회 의 조회 -->
+	
+	<!-- union에서 사용되는 resultMap -->
+	<resultMap type="kr.co.sist.exam.domain.Union" id="unionResult">
+		<result column="empno" property="empno" />
+		<result column="sal" property="sal" />
+		<result column="deptno" property="deptno" />
+		<result column="ename" property="ename" />
+		<result column="job" property="job" />
+		<result column="hiredate" property="hiredate" />
+		<result column="retired" property="retired" />
+	</resultMap>
+	
+	<!-- Join resultMap  -->
+	<resultMap type="kr.co.sist.exam.domain.EmpJoin" id="empResult">
+		<result column="empno" property="empno" />
+		<result column="ename" property="ename" />
+		<result column="sal" property="sal" />
+		<result column="hiredate" property="hiredate" />
+		<result column="deptno" property="deptno" />
+		<result column="dname" property="dname" />
+		<result column="loc" property="loc" />
+	</resultMap>
+	
+	<!-- Car resultMap : 컬럼명과 setter method명이 다른 경우에 주의 -->
+	<resultMap type="kr.co.sist.exam.domain.Car" id="carResult">
+		<result column="car_img" property="img" />
+		<result column="maker" property="maker" />
+		<result column="model" property="model" />
+		<result column="car_year" property="carYear" />
+		<result column="price" property="price" />
+		<result column="car_option" property="carOption" />
+		<result column="hiredate" property="hiredate" />
+	</resultMap>
+	
+	<!-- 조회컬럼 : EMPNO, ENAME, HIREDATE, SAL -->
+	<resultMap type="kr.co.sist.exam.domain.Demp" id="dynamicTable">
+		<result column="empno" property="empno" />
+		<result column="ename" property="ename" />
+		<result column="hiredate" property="hiredate" />
+		<result column="sal" property="sal" />
+	</resultMap>
+	
+	
+	<!-- subquery의 조회 -->
+	<select id="diaryCnt" resultType="int">
+		select count(*) cnt from diary
+	</select>
+	<!-- subquery의 조회 
+			diary 테이블에서 가장 마지막글에서부터 시작번호와 끝번호 사이의 글을 조회
+	-->
+	<select id="subquery" resultMap="dlResult" parameterType="kr.co.sist.exam.vo.DiaryListParamVO">
+		select r_num, num, subject, writer, e_year||'-'||e_month||'-'||e_day evt_date,
+		to_char(w_date,'yyyy-mm-dd hh24:mi') w_date
+		from (select num, subject, writer, e_year, e_month, e_day, w_date, row_number() over(order by w_date desc) r_num
+		from diary
+		)
+		where r_num between #{ startNum } and #{ endNum }
+	</select>
+	
+	<!-- union의 조회 : 퇴사한 사원과 재직중인 사원을 구분하여 조회 -->
+	<select id="union" resultMap="unionResult">
+		select empno, ename, job, sal, to_char(hiredate, 'yyyy-mm-dd') hiredate, deptno, retired
+		from union_test
+		where retired='N'
+		union all
+		select empno, ename, job, sal, to_char(hiredate, 'yyyy-mm-dd') hiredate, deptno, retired
+		from union_test
+		where retired='Y'
+	</select>
+	
+	
+	<!-- join의 조회 : 매니저 번호를 입력받아 매니저가 관리하는 사원들의
+			사원번호, 사원명, 연봉, 입사일, 부서번호, 부서명, 위치를 조회 -->
+	<select id="join" resultMap="empResult" parameterType="Integer">
+		select		e.empno, e.ename, e.sal, e.hiredate, d.deptno, d.dname, d.loc
+		from		emp e, dept d
+		where		e.deptno = d.deptno and e.mgr=#{ e.mgr }
+	</select>
+	
+	
+	<!-- join + subquery의 조회  
+			차량 이미지, 제조사, 모델명, 연식, 가격, 옵션, 입력일을 조회하세요.
+			가장 마지막에 입력된 차량부터 10건만 조회
+	-->
+	<select id="joinSubquery" resultMap="carResult">
+		select car_img, maker, model, car_year, price, car_option, to_char(hiredate, 'yyyy-mm-dd hh24:mi') hiredate
+		from (select car_img, maker, model, car_year, price, car_option, hiredate, row_number() over(order by hiredate desc) r_num
+				from	(select			cmo.car_img, cma.maker, cmo.model, cmo.car_year, cmo.price, cmo.car_option, cmo.hiredate
+						 from			car_maker cma, car_model cmo
+						 where			cmo.model = cma.model))
+		where r_num between 1 and 10
+	</select>
+	
+	<!-- 컬럼명 또는 테이블명이 동적일 때 조회 
+			반드시 ParameterType이 VO이어야하고 ${ getter }를 사용해야 한다. (#은 바인드변수로 대응하는 기호이므로 사용불가)
+			컬럼이 동일형으로 하나가 조회되는 경우에는 동적으로 사용할 수 있으나
+			컬럼이 여러개가 조회되는 경우에는 동적으로 사용하기 어렵다. 
+			
+			테이블명이(EMP, CP_EMP2) 외부에서 입력되어 동일 컬럼이 조회되는 경우
+			조회 컬럼 : EMPNO, ENAME, HIREDATE, SAL
+	-->
+	<select id="dtable" resultMap="dynamicTable" parameterType="kr.co.sist.exam.vo.TnameVO">
+		select empno, ename, hiredate, sal
+		from ${ tname }
+	</select>
+	<!-- dynamic query - OGNL : where, if, choose, foreach 	-->
+	<!-- if의 사용 : 
+			EMP 테이블에서 부서번호가 10~19사이면 10번 부서 사원을 검색하고, 20~29번 사이면 20번 부서 사원 검색하고,
+			30~39번 사이면 30번 부서 조회 그렇지 않으면 전체 사원조회 -->
+	<resultMap type="kr.co.sist.exam.domain.DynamicIf" id="ifResult">
+		<result column="empno" property="empno" />
+		<result column="deptno" property="deptno" />
+		<result column="ename" property="ename" />
+		<result column="job" property="job" />
+		<result column="hiredate" property="hiredate" />
+	</resultMap>
+	<select id="dynamicIf" resultMap="ifResult" parameterType="kr.co.sist.exam.vo.DeptnoVO">
+		select empno, ename, deptno, job, to_char(hiredate, 'yyyy-mm-dd') hiredate
+		from emp
+		<where>
+			<if test="deptno &gt;= 10 and deptno &lt; 20">
+				deptno = 10
+			</if>
+			<if test="deptno &gt;= 20 and deptno &lt; 30">
+				deptno = 20
+			</if>
+			<if test="deptno &gt;= 30 and deptno &lt; 40">
+				deptno = 30
+			</if>
+		</where>
+	</select>
+	
+	<!-- dynamic choose : EMP 테이블에서 부서번호가 10~19사이면 10번 부서 사원을 검색하고, 20~29번 사이면 20번 부서 사원 검색하고,
+			30~39번 사이면 30번 부서 사원 조회, 그렇지 않으면 30번 부서의 사원조회 -->
+	<select id="dynamicChoose" resultMap="ifResult" parameterType="kr.co.sist.exam.vo.DeptnoVO">
+		
+		select empno, ename, deptno, job, to_char(hiredate, 'yyyy-mm-dd') hiredate
+		from emp
+		<where>
+			<choose>
+				<when test="deptno &gt;= 10 and deptno &lt; 20">
+					deptno=10
+				</when>
+				<when test="deptno &gt;= 20 and deptno &lt; 30">
+					deptno=20
+				</when>
+				<otherwise>
+					deptno=30
+				</otherwise>
+			</choose>
+		</where>
+	</select>
+	
+	<!-- dynamic forEach : 제조사가 조회되면 제조사별 차량 조회 -->
+	<select id="dynamicForeach" resultMap="carResult" parameterType="kr.co.sist.exam.vo.CarVO1">
+		select car_img, maker, model, car_year, price, car_option, to_char(hiredate, 'yyyy-mm-dd hh24:mi') hiredate
+		from (select car_img, maker, model, car_year, price, car_option, hiredate, row_number() over(order by hiredate desc) r_num
+				from	(select			cmo.car_img, cma.maker, cmo.model, cmo.car_year, cmo.price, cmo.car_option, cmo.hiredate
+						 from			car_maker cma, car_model cmo
+						 where			cmo.model = cma.model
+		<if test="makerList != null">
+		and cma.maker in
+			<foreach collection="makerList" item="maker" open="(" close=")" separator=",">
+				#{ maker }
+			</foreach>
+		</if>
+		))
+	</select>
+	
+	
+	<!-- procedure -->
+	<!-- insert : insert_test_proc(10000, '공선의', 3000, '사원', :m, :c)
+			프로시저를 호출할 때 In parameter 값과 Out parameter값은 모두
+			VO에 함께 들어가 있어야 한다.
+			
+			in parameter => #{ getter, mode=IN } 
+			단일 데이터형 일 때
+			out parameter => #{ setter, mode=OUT, jdbcType= , javaType= } 
+	-->
+	<select id="insertProcedure" parameterType="kr.co.sist.exam.vo.TestProcVO" statementType="CALLABLE">
+	{
+		call insert_test_proc( #{ empno, mode=IN }, #{ ename, mode=IN }, 
+		#{ sal, mode=IN }, #{ job, mode=IN }, #{ msg, mode=OUT, jdbcType=VARCHAR, javaType=String },
+		#{ rowCnt, mode=OUT, jdbcType=NUMERIC, javaType=int } )
+	}
+	</select>
+	<!-- cursor -->
+	<resultMap type="kr.co.sist.exam.domain.EmpProcedure" id="epResult">
+		<result column="empno" property="empno" />
+		<result column="sal" property="sal" />
+		<result column="deptno" property="deptno" />
+		<result column="ename" property="ename" />
+		<result column="dname" property="dname" />
+		<result column="loc" property="loc" />
+	</resultMap>
+	<select id="selectProcedure" resultMap="epResult" parameterType="kr.co.sist.exam.vo.CursorVO" statementType="CALLABLE">
+		{
+			call select_emp(#{deptno, mode=IN},
+				#{empnoList, mode=OUT, jdbcType=CURSOR, javaType=ResultSet, resultMap=epResult} )
+		}
+	</select>
+	
+	<!-- transaction 
+			:test_transaction1 테이블에 레코드를 추가-->
+	<insert id="tr1" parameterType="kr.co.sist.exam.vo.TransactionVO">
+		insert into test_transaction1(SUBJECT, WRITER, INPUT_DATE) values(#{ subject }, #{ writer }, sysdate )
+	</insert>
+
+
+	<!-- transaction 
+			:test_transaction2 테이블에 레코드를 추가(제목이 긴 글은 추가되지 않는다.)-->
+	<insert id="tr2" parameterType="kr.co.sist.exam.vo.TransactionVO">
+		insert into test_transaction2(SUBJECT, WRITER, INPUT_DATE) values(#{ subject }, #{ writer }, sysdate )
+	</insert>
+	
+	
+	
+	
+	
+	
+	<!-- 0409 숙제 - car_country 테이블의 country 컬럼을 중복없이 조회 -->
+	<select id="carCountry" resultType="String" parameterType="String">
+		select distinct maker
+		from (
+				select cc.country, cma.maker, cmo.model, cmo.car_img, cmo.car_option, cmo.car_year
+				from car_country cc, car_maker cma, car_model cmo
+				where cc.maker = cma.maker and cma.model = cmo.model(+) and cc.country = #{ country }
+				)
+	</select>
+	<select id="carMaker" resultType="String" parameterType="String">
+		SELECT DISTINCT MODEL
+		FROM (
+				SELECT CC.COUNTRY, CMA.MAKER, CMO.MODEL, CMO.CAR_IMG, CMO.CAR_OPTION, CMO.CAR_YEAR
+				FROM CAR_COUNTRY CC, CAR_MAKER CMA, CAR_MODEL CMO
+				WHERE CC.MAKER = CMA.MAKER AND CMA.MODEL = CMO.MODEL AND CMA.MAKER = #{ maker }
+				)
+	</select>
+	
+	<resultMap type="kr.co.sist.exam.domain.CarDomain" id="carResultSet">
+		<result column="car_img" property="img" />
+		<result column="car_option" property="option" />
+		<result column="car_year" property="year" />
+	</resultMap>
+	<select id="carInform" resultMap="carResultSet" parameterType="kr.co.sist.exam.vo.CarVO">
+		SELECT CAR_IMG, CAR_OPTION, CAR_YEAR
+		FROM (
+				SELECT CC.COUNTRY, CMA.MAKER, CMO.MODEL, CMO.CAR_IMG, CMO.CAR_OPTION, CMO.CAR_YEAR
+				FROM CAR_COUNTRY CC, CAR_MAKER CMA, CAR_MODEL CMO
+				WHERE CC.MAKER = CMA.MAKER AND CMA.MODEL = CMO.MODEL
+				)
+		WHERE COUNTRY = #{ country } AND MAKER = #{ maker } AND MODEL = #{ model }
+	</select>
+</mapper>
